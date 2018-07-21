@@ -9,89 +9,64 @@ import numpy as np
 import matplotlib.pyplot as plt  
 i = 0
 
-
-# print(index_paths)
-
-
 data_embedded = 'embedded.pkl'
-idx = 'Indexer.pkl'
-querry_path = '/Users/ngocphu/Documents/Deep Fashion/search algorithm/output_sorted/img/WOMEN/Cardigans/id_00000036/15811_02_3_back.jpg'
-image_path = sorted(glob.glob('/Users/ngocphu/Documents/Deep Fashion/search algorithm/output_sorted/*/*/*/*/*.jpg'))
-# print(len(image_path))
-results = []
-with open('model.json', 'r') as f:
-    model = model_from_json(f.read())
-
-input_1 = model.input
-embedded_output = model.get_layer('embedded_layer').output
-get_output = K.function(inputs = [input_1], outputs = [embedded_output])
+idx = 'Indexer_8.pkl'
+image_path = sorted(glob.glob('/Users/ngocphu/Documents/Deep_Fashion/search_algorithm/output_sorted/*/*/*/*/*.jpg'))
 IMAGE_SIZE = 128
+# print(index_paths)
+class Find_Image():
+    def __init__(self):
+        self.load_model()
+        self.load_embedded_data()
+        self.load_indexer()
 
-def find_pic(ids):
-    pic_path = image_path[ids]
-    return pic_path
+    def __prewhiten(self, x):
+        self.mean = np.mean(x)
+        self.std = np.std(x)
+        self.std_adj = np.maximum(self.std, 1.0/np.sqrt(x.size))
+        self.y = np.multiply(np.subtract(x, self.mean), 1/self.std_adj)
+        return self.y
 
-def __read_image(path):
-    img = keras.preprocessing.image.load_img(path)
-    img = keras.preprocessing.image.img_to_array(img)
+    def __read_image(self, path):
+        self.img = path
+        self.img = cv2.resize(self.img, (IMAGE_SIZE, IMAGE_SIZE))
+        self.img = self.img/255.0
+        self.img = self.__prewhiten(self.img)
+        return self.img
 
-    img = cv2.resize(img, (IMAGE_SIZE, IMAGE_SIZE))
+    def get_querry_embedding(self, query_path):
+        self.query_img = self.__read_image(query_path)
+        self.query_img1 = self.query_img.reshape((-1, self.query_img.shape[0], self.query_img.shape[1], 3))
+        self.query_embedded = self.get_output([self.query_img1])
+        self.query_embedded = np.array(self.query_embedded).reshape((1,1024))
+        return self.query_embedded
 
-    img = img/255.0
-    img = __prewhiten(img)
-    return img
+    def load_model(self):
+        with open('model.json', 'r') as f:
+            self.model = model_from_json(f.read())
+        self.model.load_weights('Catchy_train-weights_1-6hdf5')
+        self.input_1 = self.model.input
+        self.embedded_output = self.model.get_layer('embedded_layer').output
+        self.get_output = K.function(inputs = [self.input_1], outputs = [self.embedded_output])
+    
 
-def __prewhiten(x):
-    mean = np.mean(x)
-    std = np.std(x)
-    std_adj = np.maximum(std, 1.0/np.sqrt(x.size))
-    y = np.multiply(np.subtract(x, mean), 1/std_adj)
-    return y
+    def load_embedded_data(self):
+        with open(data_embedded, 'rb') as file:
+            self.database = np.array(pickle.load(file))
+        # print(database.shape)
+        self.database = self.database.reshape((52712,1024))
+    
+    def load_indexer(self):
+        with open(idx, 'rb') as fi:
+            self.indexer = pickle.load(fi)
+    
+    def search(self, querry_image):
+        self.query_embedding = self.get_querry_embedding(querry_image)
+        self.ids, self.dis = self.indexer.search(self.query_embedding, 3)
 
-
-query_img = __read_image(querry_path)
-query_img1 = query_img.reshape((-1, query_img.shape[0], query_img.shape[1], 3))
-query_embedded = np.array(get_output([query_img1])).reshape((1,1024))
-# print(query_embedded)
-pos = 0
-
-with open(data_embedded, 'rb') as file:
-    database = np.array(pickle.load(file))
-    print(database.shape)
-    database = database.reshape((52712,1024))
-
-with open(idx, 'rb') as fi:
-    indexer = pickle.load(fi)
-    indexer.add(database)
-    ids, dis = indexer.search(query_embedded, 3)
-cv2.imshow('querry',query_img)
-print(ids)
-# i = ids[-1][2]
-# print(i)
-# pic_path = find_pic[i]
-# ic = cv2.imread(pic_path)
-# cv2.imshow('find',pic)
-# print(pic.shape)
-# cv2.waitKey(0)
-# for i in ids[-1]:
-#     print(i)
-#     pic_path = find_pic(i)
-#     print(pic_path)
-#     pic = cv2.imread(pic_path)
-#     cv2.imshow('find',pic)
-#     print(pic.shape)
-#     cv2.waitKey(0)
-
-#rint(results)
-
-# dtype = [('pos', int), ('ids', int), ('dis', float)]
-# #results = np.array(results)
-# results= np.array(results, dtype=dtype)
+        return self.ids, self.dis
 
 
-# fitest = np.sort(results, order='dis')
-
-# print(fitest)  
 
 
 
